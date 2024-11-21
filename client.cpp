@@ -20,23 +20,12 @@
 SharedMemory* sharedMemoryPtr = nullptr;
 std::vector<std::thread> threads;
 
-std::atomic<bool> running(true);
-sem_t all_threads_safe_exit;
-
 void cleanup(int sig) {
 
-    running = false;
-
-    // sem_post(&sharedMemoryPtr->req_buffer_lock);
-    // sem_post(&sharedMemoryPtr->res_buffer_lock);
-    // sem_post(&sharedMemoryPtr->res_space_available);
-    // sem_post(&sharedMemoryPtr->req_available);
-
-    while(true) {
-        int threads_exited;
-        sem_getvalue(&all_threads_safe_exit, &threads_exited);
-        if(threads_exited == NUM_CLIENT_THREADS) break;
-    }
+    sem_post(&sharedMemoryPtr->req_buffer_lock);
+    sem_post(&sharedMemoryPtr->res_buffer_lock);
+    sem_post(&sharedMemoryPtr->res_space_available);
+    sem_post(&sharedMemoryPtr->req_available);
 
     for (auto& thread : threads) {
         if(thread.joinable())
@@ -60,7 +49,7 @@ void sendRequestwaitResponse() {
 
     Request request;
 
-    while(running) {
+    while(true) {
 
         request.requestid = requestIdDist(generator);
         request.operation = static_cast<OperationType>(opTypeDist(generator));
@@ -94,8 +83,6 @@ void sendRequestwaitResponse() {
         sem_post(&sharedMemoryPtr->res_buffer_lock);
         sem_post(&sharedMemoryPtr->res_space_available);
     }
-    sem_post(&all_threads_safe_exit);
-    return;
 
 }
 
@@ -114,7 +101,6 @@ int main(int argc, char* argv[]) {
     }
 
     sharedMemoryPtr = (SharedMemory*)shm_ptr;
-    sem_init(&all_threads_safe_exit, 0, 0);
     signal(SIGINT, cleanup);
 
     for (int i = 0; i < NUM_CLIENT_THREADS; ++i) { 
