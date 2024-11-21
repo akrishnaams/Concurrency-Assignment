@@ -32,12 +32,12 @@ struct SharedMemory {
     Request request;
     sem_t req_available;
     sem_t req_space_available;
-    sem_t req_buffer_lock;
+    // sem_t req_buffer_lock;
 
     Response response;
     sem_t res_available;
     sem_t res_space_available;
-    sem_t res_buffer_lock;
+    // sem_t res_buffer_lock;
 };
 
 #endif

@@ -58,23 +58,22 @@ void sendRequestwaitResponse() {
         std::cout<<"Request Created\n";
 
         sem_wait(&sharedMemoryPtr->req_space_available);
-        sem_wait(&sharedMemoryPtr->req_buffer_lock);
+        // sem_wait(&sharedMemoryPtr->req_buffer_lock);
         sharedMemoryPtr->request=request;
-        sem_post(&sharedMemoryPtr->req_buffer_lock);
+        // sem_post(&sharedMemoryPtr->req_buffer_lock);
         sem_post(&sharedMemoryPtr->req_available);
 
         std::cout<<"Request Sent\n";
 
         while(true) {
             sem_wait(&sharedMemoryPtr->res_available);
-            sem_wait(&sharedMemoryPtr->res_buffer_lock);
+            // sem_wait(&sharedMemoryPtr->res_buffer_lock);
             if (sharedMemoryPtr->response.requestid == request.requestid) break;
-            sem_post(&sharedMemoryPtr->res_buffer_lock);
+            // sem_post(&sharedMemoryPtr->res_buffer_lock);
             sem_post(&sharedMemoryPtr->res_available);
         }
-        
         std::cout<<"Response Received\n";
-        sem_post(&sharedMemoryPtr->res_buffer_lock);
+        // sem_post(&sharedMemoryPtr->res_buffer_lock);
         sem_post(&sharedMemoryPtr->res_space_available);
     }
 

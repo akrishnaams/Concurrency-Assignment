@@ -76,9 +76,9 @@ void processRequests() {
 void enqueueRequests() {
     while(true) {
         sem_wait(&sharedMemoryPtr->req_available);
-        sem_wait(&sharedMemoryPtr->req_buffer_lock);
+        // sem_wait(&sharedMemoryPtr->req_buffer_lock);
         Request request = sharedMemoryPtr->request;
-        sem_post(&sharedMemoryPtr->req_buffer_lock);
+        // sem_post(&sharedMemoryPtr->req_buffer_lock);
         sem_post(&sharedMemoryPtr->req_space_available);
 
         std::cout<<"Request Received\n";
@@ -103,9 +103,9 @@ void dequeueResponses() {
         std::cout<<"Response dequeued\n";
 
         sem_wait(&sharedMemoryPtr->res_space_available);
-        sem_wait(&sharedMemoryPtr->res_buffer_lock);
+        // sem_wait(&sharedMemoryPtr->res_buffer_lock);
         sharedMemoryPtr->response = response;
-        sem_post(&sharedMemoryPtr->res_buffer_lock);
+        // sem_post(&sharedMemoryPtr->res_buffer_lock);
         sem_post(&sharedMemoryPtr->res_available);
 
         std::cout<<"Response sent\n";
@@ -146,11 +146,11 @@ int main(int argc, char* argv[]) {
 
     sem_init(&sharedMemoryPtr->req_available, 1, 0); 
     sem_init(&sharedMemoryPtr->req_space_available, 1, 1); 
-    sem_init(&sharedMemoryPtr->req_buffer_lock, 1, 1); 
+    // sem_init(&sharedMemoryPtr->req_buffer_lock, 1, 1); 
 
     sem_init(&sharedMemoryPtr->res_available, 1, 0); 
     sem_init(&sharedMemoryPtr->res_space_available, 1, 1); 
-    sem_init(&sharedMemoryPtr->res_buffer_lock, 1, 1);
+    // sem_init(&sharedMemoryPtr->res_buffer_lock, 1, 1);
 
     sem_init(&req_queue_lock, 0, 1);
     sem_init(&res_queue_lock, 0, 1);
