@@ -19,18 +19,14 @@
 
 SharedMemory* sharedMemoryPtr = nullptr;
 std::vector<std::thread> threads;
+std::atomic<bool> running(true);
+sem_t threads_safe_exit;
 
 void cleanup(int sig) {
 
-    sem_post(&sharedMemoryPtr->req_buffer_lock);
-    sem_post(&sharedMemoryPtr->res_buffer_lock);
-    sem_post(&sharedMemoryPtr->res_space_available);
-    sem_post(&sharedMemoryPtr->req_available);
-
-    for (auto& thread : threads) {
-        if(thread.joinable())
-            thread.join();
-    }
+    running = false;
+    for (int i = 0; i < NUM_CLIENT_THREADS; i++) 
+        sem_wait(&threads_safe_exit);
 
     munmap(sharedMemoryPtr, sizeof(SharedMemory));
     exit(0);
@@ -49,7 +45,7 @@ void sendRequestwaitResponse() {
 
     Request request;
 
-    while(true) {
+    while(running) {
 
         request.requestid = requestIdDist(generator);
         request.operation = static_cast<OperationType>(opTypeDist(generator));
@@ -76,13 +72,14 @@ void sendRequestwaitResponse() {
             sem_post(&sharedMemoryPtr->res_buffer_lock);
             sem_post(&sharedMemoryPtr->res_available);
         }
-        if (sharedMemoryPtr->response.returntype==SUCCESS) {
-            // Processed sample;
-            std::cout<<"Response Received\n";
-        }
+        
+        std::cout<<"Response Received\n";
         sem_post(&sharedMemoryPtr->res_buffer_lock);
         sem_post(&sharedMemoryPtr->res_space_available);
     }
+
+    sem_post(&threads_safe_exit);
+    return;
 
 }
 
