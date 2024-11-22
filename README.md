@@ -145,10 +145,11 @@ We can also observe that latency in reading response is quite high compared to w
 `Note:` While one might expect that increasing the number of client threads (and number of processing threads) will increase the total number of requests processed per second, that may not be observed, as the time taken to process each request increases (because latency of interaction increases with number of client threads)  
 
 ## Latency: Hash Table Collisions
-A hash table of given size is initialized in the server. Hash table collisions are resolved by maintaining a linked list for each bucket/entry in the hash table. As the linked list chain length increases, the time taken for READ and REMOVE operation increases linearly O(n). However the time taken for INSERT operation is O(1) since insertion happens at the top of the linked list. Following results prove that.
+A hash table of given size is initialized in the server. Hash table collisions are resolved by maintaining a linked list for each bucket/entry in the hash table. As the linked list chain length increases, the time taken for READ and REMOVE operation increases linearly O(n). However the time taken for INSERT operation is O(1) since insertion happens at the top of the linked list. Following results prove that. We monitor the time taken by the client between writing the request and reading the response. To avoid considering the latency caused due to the previous factor, the number of client and processing threads are set to 1.
+
 ![image](https://github.com/user-attachments/assets/ef1cb358-c5b9-4a98-a5b0-c93ac4a72844)
-![image](https://github.com/user-attachments/assets/f4e7be16-ebef-4f87-8ca1-2fca0c714d3b)
-![image](https://github.com/user-attachments/assets/e4846eb5-3a23-4d0d-9044-61e6f47e4fda)
+![image](https://github.com/user-attachments/assets/0900a4a5-c2c1-4e1a-91a8-d1b56142a6fd)
+![image](https://github.com/user-attachments/assets/d61f7be2-a756-49a6-b017-adfa93137a01)
 ```
 Slope of regression line for READ (num_hash=10): 1.4033
 Slope of regression line for READ (num_hash=30): 0.7112
