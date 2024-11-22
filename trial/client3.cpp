@@ -11,22 +11,34 @@
 #include <csignal>
 #include <fcntl.h> 
 #include <atomic>
+#include <ctime>
 
 #define SHM_REQUEST_NAME "/shared_memory_request"
-#define NUM_CLIENT_THREADS 1
+#define NUM_CLIENT_THREADS 16
 
 #define MAX_STRING_LEN 6
 
+#define REQUEST_WAIT_TIME 5
+#define WAIT_TIME 1
+#define RESPONSE_WAIT_TIME 300
+
 SharedMemory* sharedMemoryPtr = nullptr;
 std::vector<std::thread> threads;
+
 std::atomic<bool> running(true);
-sem_t threads_safe_exit;
+sem_t all_threads_safe_exit;
 
 void cleanup(int sig) {
 
     running = false;
-    for (int i = 0; i < NUM_CLIENT_THREADS; i++) 
-        sem_wait(&threads_safe_exit);
+
+    for (auto i = 0; i < NUM_CLIENT_THREADS; i++)
+        sem_wait(&all_threads_safe_exit);
+
+    for (auto& thread : threads) {
+        if(thread.joinable())
+            thread.join();
+    }
 
     munmap(sharedMemoryPtr, sizeof(SharedMemory));
     exit(0);
@@ -57,27 +69,50 @@ void sendRequestwaitResponse() {
 
         std::cout<<"Request Created\n";
 
-        sem_wait(&sharedMemoryPtr->req_space_available);
+        struct timespec req_ts, res_ts;
+        clock_gettime(CLOCK_REALTIME, &req_ts);
+        req_ts.tv_sec += REQUEST_WAIT_TIME;
+        res_ts.tv_sec = req_ts.tv_sec + RESPONSE_WAIT_TIME;
+
+        if (sem_timedwait(&sharedMemoryPtr->req_space_available,&req_ts) < 0) continue;
+        if (sem_timedwait(&sharedMemoryPtr->req_buffer_lock,&req_ts) < 0) continue;
+        // sem_wait(&sharedMemoryPtr->req_space_available);
         // sem_wait(&sharedMemoryPtr->req_buffer_lock);
         sharedMemoryPtr->request=request;
-        // sem_post(&sharedMemoryPtr->req_buffer_lock);
+        sem_post(&sharedMemoryPtr->req_buffer_lock);
         sem_post(&sharedMemoryPtr->req_available);
 
         std::cout<<"Request Sent\n";
 
-        while(true) {
-            sem_wait(&sharedMemoryPtr->res_available);
+        bool responsiveness = true;
+
+        while(running) {
+
+            struct timespec wait_ts, curr_ts;
+            clock_gettime(CLOCK_REALTIME, &curr_ts);
+            if (curr_ts.tv_sec > res_ts.tv_sec) {responsiveness = false; break;}
+
+            wait_ts.tv_sec = curr_ts.tv_sec + WAIT_TIME;
+            if (sem_timedwait(&sharedMemoryPtr->res_available,&wait_ts) < 0) { continue; }
+            if (sem_timedwait(&sharedMemoryPtr->res_buffer_lock,&wait_ts) < 0) { continue; }
+            // sem_wait(&sharedMemoryPtr->res_available);
             // sem_wait(&sharedMemoryPtr->res_buffer_lock);
-            if (sharedMemoryPtr->response.requestid == request.requestid) break;
-            // sem_post(&sharedMemoryPtr->res_buffer_lock);
+            
+            if (sharedMemoryPtr->response.requestid == request.requestid) {responsiveness = true; break; }
+            
+            sem_post(&sharedMemoryPtr->res_buffer_lock);
             sem_post(&sharedMemoryPtr->res_available);
         }
+        if (!running) { break; }
+        if (!responsiveness) {
+            std::cout<<"Response NOT Received. Timeout\n";            
+            continue;
+        }
         std::cout<<"Response Received\n";
-        // sem_post(&sharedMemoryPtr->res_buffer_lock);
+        sem_post(&sharedMemoryPtr->res_buffer_lock);
         sem_post(&sharedMemoryPtr->res_space_available);
     }
-
-    sem_post(&threads_safe_exit);
+    sem_post(&all_threads_safe_exit);
     return;
 
 }
@@ -97,7 +132,7 @@ int main(int argc, char* argv[]) {
     }
 
     sharedMemoryPtr = (SharedMemory*)shm_ptr;
-    sem_init(&threads_safe_exit, 0, 0);
+    sem_init(&all_threads_safe_exit, 0, 0);
     signal(SIGINT, cleanup);
 
     for (int i = 0; i < NUM_CLIENT_THREADS; ++i) { 

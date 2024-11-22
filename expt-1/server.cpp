@@ -14,7 +14,7 @@
 #include <fcntl.h> 
 
 #define SHM_REQUEST_NAME "/shared_memory_request"
-#define NUM_PROCESSING_THREADS 4
+#define NUM_PROCESSING_THREADS 25
 
 HashTable* tablePtr = nullptr;
 SharedMemory* sharedMemoryPtr = nullptr;
@@ -36,7 +36,7 @@ void processRequests() {
         requestQueue.pop();
         sem_post(&req_queue_lock);
 
-        std::cout<<"Request Dequeued\n";
+        // std::cout<<"Request Dequeued\n";
 
         std::string input_string(request.value);
         Response response;
@@ -68,7 +68,7 @@ void processRequests() {
         sem_post(&res_queue_lock);
         sem_post(&res_queue_size);
 
-        std::cout<<"Response queued\n";
+        // std::cout<<"Response queued\n";
 
     }
 }
@@ -76,19 +76,17 @@ void processRequests() {
 void enqueueRequests() {
     while(true) {
         sem_wait(&sharedMemoryPtr->req_available);
-        // sem_wait(&sharedMemoryPtr->req_buffer_lock);
         Request request = sharedMemoryPtr->request;
-        // sem_post(&sharedMemoryPtr->req_buffer_lock);
         sem_post(&sharedMemoryPtr->req_space_available);
 
-        std::cout<<"Request Received\n";
+        // std::cout<<"Request Received\n";
 
         sem_wait(&req_queue_lock);
         requestQueue.push(request);
         sem_post(&req_queue_lock);
         sem_post(&req_queue_size);
 
-        std::cout<<"Request Queued\n";
+        // std::cout<<"Request Queued\n";
     }
 }
 
@@ -100,15 +98,13 @@ void dequeueResponses() {
         responseQueue.pop();
         sem_post(&res_queue_lock);
 
-        std::cout<<"Response dequeued\n";
+        // std::cout<<"Response dequeued\n";
 
         sem_wait(&sharedMemoryPtr->res_space_available);
-        // sem_wait(&sharedMemoryPtr->res_buffer_lock);
         sharedMemoryPtr->response = response;
-        // sem_post(&sharedMemoryPtr->res_buffer_lock);
         sem_post(&sharedMemoryPtr->res_available);
 
-        std::cout<<"Response sent\n";
+        // std::cout<<"Response sent\n";
     }
 }
 
@@ -146,11 +142,9 @@ int main(int argc, char* argv[]) {
 
     sem_init(&sharedMemoryPtr->req_available, 1, 0); 
     sem_init(&sharedMemoryPtr->req_space_available, 1, 1); 
-    // sem_init(&sharedMemoryPtr->req_buffer_lock, 1, 1); 
 
     sem_init(&sharedMemoryPtr->res_available, 1, 0); 
     sem_init(&sharedMemoryPtr->res_space_available, 1, 1); 
-    // sem_init(&sharedMemoryPtr->res_buffer_lock, 1, 1);
 
     sem_init(&req_queue_lock, 0, 1);
     sem_init(&res_queue_lock, 0, 1);

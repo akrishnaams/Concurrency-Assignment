@@ -11,9 +11,13 @@
 #include <csignal>
 #include <fcntl.h> 
 #include <atomic>
+#include <ctime> 
+#include <sstream>
 
 #define SHM_REQUEST_NAME "/shared_memory_request"
-#define NUM_CLIENT_THREADS 1
+
+#define NUM_REQUESTS 400000
+#define NUM_CLIENT_THREADS 25
 
 #define MAX_STRING_LEN 6
 
@@ -32,7 +36,12 @@ void cleanup(int sig) {
     exit(0);
 }
 
-//TODO: Do we need req_buffer_lock and res_buffer_lock?
+inline long long getCurrentTimeInNanoseconds() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts); // Get time since the system started (monotonic clock)
+    return ts.tv_sec * 1000000000LL + ts.tv_nsec; // Convert seconds to nanoseconds and add nanoseconds
+}
+
 
 void sendRequestwaitResponse() {
 
@@ -45,7 +54,9 @@ void sendRequestwaitResponse() {
 
     Request request;
 
-    while(running) {
+    uint32_t num_requests = 0;
+
+    while((running) && (num_requests < NUM_REQUESTS)) {
 
         request.requestid = requestIdDist(generator);
         request.operation = static_cast<OperationType>(opTypeDist(generator));
@@ -55,26 +66,17 @@ void sendRequestwaitResponse() {
         }
         request.value[stringLength]='\0';
 
-        std::cout<<"Request Created\n";
-
         sem_wait(&sharedMemoryPtr->req_space_available);
-        // sem_wait(&sharedMemoryPtr->req_buffer_lock);
         sharedMemoryPtr->request=request;
-        // sem_post(&sharedMemoryPtr->req_buffer_lock);
         sem_post(&sharedMemoryPtr->req_available);
-
-        std::cout<<"Request Sent\n";
 
         while(true) {
             sem_wait(&sharedMemoryPtr->res_available);
-            // sem_wait(&sharedMemoryPtr->res_buffer_lock);
             if (sharedMemoryPtr->response.requestid == request.requestid) break;
-            // sem_post(&sharedMemoryPtr->res_buffer_lock);
             sem_post(&sharedMemoryPtr->res_available);
         }
-        std::cout<<"Response Received\n";
-        // sem_post(&sharedMemoryPtr->res_buffer_lock);
         sem_post(&sharedMemoryPtr->res_space_available);
+        num_requests++;
     }
 
     sem_post(&threads_safe_exit);
@@ -97,7 +99,6 @@ int main(int argc, char* argv[]) {
     }
 
     sharedMemoryPtr = (SharedMemory*)shm_ptr;
-    sem_init(&threads_safe_exit, 0, 0);
     signal(SIGINT, cleanup);
 
     for (int i = 0; i < NUM_CLIENT_THREADS; ++i) { 

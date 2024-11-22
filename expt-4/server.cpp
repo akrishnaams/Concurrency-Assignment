@@ -12,9 +12,11 @@
 #include <queue>
 #include <csignal>
 #include <fcntl.h> 
+#include <ctime> 
+#include <sstream>
 
 #define SHM_REQUEST_NAME "/shared_memory_request"
-#define NUM_PROCESSING_THREADS 4
+#define NUM_PROCESSING_THREADS 25
 
 HashTable* tablePtr = nullptr;
 SharedMemory* sharedMemoryPtr = nullptr;
@@ -36,7 +38,7 @@ void processRequests() {
         requestQueue.pop();
         sem_post(&req_queue_lock);
 
-        std::cout<<"Request Dequeued\n";
+        // std::cout<<"Request Dequeued\n";
 
         std::string input_string(request.value);
         Response response;
@@ -68,7 +70,7 @@ void processRequests() {
         sem_post(&res_queue_lock);
         sem_post(&res_queue_size);
 
-        std::cout<<"Response queued\n";
+        // std::cout<<"Response queued\n";
 
     }
 }
@@ -76,23 +78,28 @@ void processRequests() {
 void enqueueRequests() {
     while(true) {
         sem_wait(&sharedMemoryPtr->req_available);
-        // sem_wait(&sharedMemoryPtr->req_buffer_lock);
         Request request = sharedMemoryPtr->request;
-        // sem_post(&sharedMemoryPtr->req_buffer_lock);
         sem_post(&sharedMemoryPtr->req_space_available);
 
-        std::cout<<"Request Received\n";
+        // std::cout<<"Request Received\n";
 
         sem_wait(&req_queue_lock);
         requestQueue.push(request);
         sem_post(&req_queue_lock);
         sem_post(&req_queue_size);
 
-        std::cout<<"Request Queued\n";
+        // std::cout<<"Request Queued\n";
     }
 }
 
+inline long long getCurrentTimeInNanoseconds() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts); // Get time since the system started (monotonic clock)
+    return ts.tv_sec * 1000000000LL + ts.tv_nsec; // Convert seconds to nanoseconds and add nanoseconds
+}
+
 void dequeueResponses() {
+    std::ostringstream oss;
     while(true) {
         sem_wait(&res_queue_size);
         sem_wait(&res_queue_lock);
@@ -100,15 +107,20 @@ void dequeueResponses() {
         responseQueue.pop();
         sem_post(&res_queue_lock);
 
-        std::cout<<"Response dequeued\n";
+        // std::cout<<"Response dequeued\n";
 
+        auto response_created_time = getCurrentTimeInNanoseconds();
         sem_wait(&sharedMemoryPtr->res_space_available);
-        // sem_wait(&sharedMemoryPtr->res_buffer_lock);
         sharedMemoryPtr->response = response;
-        // sem_post(&sharedMemoryPtr->res_buffer_lock);
         sem_post(&sharedMemoryPtr->res_available);
+        auto response_sent_time = getCurrentTimeInNanoseconds();
 
-        std::cout<<"Response sent\n";
+        auto time_to_send = (response_sent_time - response_created_time);
+        oss << time_to_send  << "\n";
+        std::cout << oss.str();
+        oss.str("");
+
+        // std::cout<<"Response sent\n";
     }
 }
 
@@ -146,11 +158,9 @@ int main(int argc, char* argv[]) {
 
     sem_init(&sharedMemoryPtr->req_available, 1, 0); 
     sem_init(&sharedMemoryPtr->req_space_available, 1, 1); 
-    // sem_init(&sharedMemoryPtr->req_buffer_lock, 1, 1); 
 
     sem_init(&sharedMemoryPtr->res_available, 1, 0); 
     sem_init(&sharedMemoryPtr->res_space_available, 1, 1); 
-    // sem_init(&sharedMemoryPtr->res_buffer_lock, 1, 1);
 
     sem_init(&req_queue_lock, 0, 1);
     sem_init(&res_queue_lock, 0, 1);

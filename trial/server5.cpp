@@ -12,6 +12,8 @@
 #include <queue>
 #include <csignal>
 #include <fcntl.h> 
+#include <ctime>
+#include <sstream>
 
 #define SHM_REQUEST_NAME "/shared_memory_request"
 #define NUM_PROCESSING_THREADS 4
@@ -28,6 +30,8 @@ std::queue<Response> responseQueue;
 
 void processRequests() {
 
+    std::ostringstream oss;
+
     while(true) {
 
         sem_wait(&req_queue_size);
@@ -36,7 +40,9 @@ void processRequests() {
         requestQueue.pop();
         sem_post(&req_queue_lock);
 
-        std::cout<<"Request Dequeued\n";
+        oss << "Request Dequeued " << request.requestid << "\n";
+        std::cout << oss.str();
+        oss.clear();
 
         std::string input_string(request.value);
         Response response;
@@ -51,7 +57,7 @@ void processRequests() {
             response.returntype = SUCCESS;
             response.result = tablePtr->read(input_string);
         } 
-        else if (request.operation == DELETE) {
+        else if (request.operation == INSERT) {
             tablePtr->remove(input_string);
             response.requestid = request.requestid;
             response.returntype = SUCCESS;
@@ -68,31 +74,43 @@ void processRequests() {
         sem_post(&res_queue_lock);
         sem_post(&res_queue_size);
 
-        std::cout<<"Response queued\n";
+        oss << "Response Enqueued " << response.requestid << "\n";
+        std::cout << oss.str();
+        oss.clear();
 
     }
 }
 
 void enqueueRequests() {
+
+    std::ostringstream oss;
+
     while(true) {
         sem_wait(&sharedMemoryPtr->req_available);
-        // sem_wait(&sharedMemoryPtr->req_buffer_lock);
+        sem_wait(&sharedMemoryPtr->req_buffer_lock);
         Request request = sharedMemoryPtr->request;
-        // sem_post(&sharedMemoryPtr->req_buffer_lock);
+        sem_post(&sharedMemoryPtr->req_buffer_lock);
         sem_post(&sharedMemoryPtr->req_space_available);
 
-        std::cout<<"Request Received\n";
+        oss << "Request received " << request.requestid << "\n";
+        std::cout << oss.str();
+        oss.clear();
 
         sem_wait(&req_queue_lock);
         requestQueue.push(request);
         sem_post(&req_queue_lock);
         sem_post(&req_queue_size);
 
-        std::cout<<"Request Queued\n";
+        oss << "Request Enqueued " << request.requestid << "\n";
+        std::cout << oss.str();
+        oss.clear();
     }
 }
 
 void dequeueResponses() {
+
+    std::ostringstream oss;
+
     while(true) {
         sem_wait(&res_queue_size);
         sem_wait(&res_queue_lock);
@@ -100,19 +118,49 @@ void dequeueResponses() {
         responseQueue.pop();
         sem_post(&res_queue_lock);
 
-        std::cout<<"Response dequeued\n";
+        oss << "Response Dequeued " << response.requestid << "\n";
+        std::cout << oss.str();
+        oss.clear();
 
-        sem_wait(&sharedMemoryPtr->res_space_available);
-        // sem_wait(&sharedMemoryPtr->res_buffer_lock);
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += 1;
+
+        bool is_response_sent = true;
+        if (sem_timedwait(&sharedMemoryPtr->res_space_available,&ts) < 0) {
+            is_response_sent = false;
+        }
+        if (sem_timedwait(&sharedMemoryPtr->res_buffer_lock,&ts) < 0) {
+            if (is_response_sent) {
+                sem_post(&sharedMemoryPtr->res_space_available);
+            }
+            is_response_sent = false;
+        }
+        if (!is_response_sent) {
+            oss << "Response NOT Sent " << response.requestid << "\n";
+            std::cout << oss.str();
+            oss.clear();
+            continue;
+        }
         sharedMemoryPtr->response = response;
-        // sem_post(&sharedMemoryPtr->res_buffer_lock);
+        sem_post(&sharedMemoryPtr->res_buffer_lock);
         sem_post(&sharedMemoryPtr->res_available);
 
-        std::cout<<"Response sent\n";
+        oss << "Response Sent " << response.requestid << "\n";
+        std::cout << oss.str();
+        oss.clear();
+
     }
 }
 
 void cleanup(int sig) {
+
+    sem_destroy(&sharedMemoryPtr->req_available);
+    sem_destroy(&sharedMemoryPtr->req_space_available);
+    sem_destroy(&sharedMemoryPtr->req_buffer_lock);
+    sem_destroy(&sharedMemoryPtr->res_available);
+    sem_destroy(&sharedMemoryPtr->res_space_available);
+    sem_destroy(&sharedMemoryPtr->res_buffer_lock);
 
     munmap(sharedMemoryPtr, sizeof(SharedMemory));
     shm_unlink(SHM_REQUEST_NAME);
@@ -146,11 +194,11 @@ int main(int argc, char* argv[]) {
 
     sem_init(&sharedMemoryPtr->req_available, 1, 0); 
     sem_init(&sharedMemoryPtr->req_space_available, 1, 1); 
-    // sem_init(&sharedMemoryPtr->req_buffer_lock, 1, 1); 
+    sem_init(&sharedMemoryPtr->req_buffer_lock, 1, 1); 
 
     sem_init(&sharedMemoryPtr->res_available, 1, 0); 
     sem_init(&sharedMemoryPtr->res_space_available, 1, 1); 
-    // sem_init(&sharedMemoryPtr->res_buffer_lock, 1, 1);
+    sem_init(&sharedMemoryPtr->res_buffer_lock, 1, 1);
 
     sem_init(&req_queue_lock, 0, 1);
     sem_init(&res_queue_lock, 0, 1);
