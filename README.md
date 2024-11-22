@@ -174,6 +174,8 @@ Slope of regression line for REMOVE (num_hash=100000): 0.0002
 ```
 As we can observe, time taken for INSERTION operation remains the same even after a large number of elements inserted into the linked lists of the hash table buckets. However, for READ and REMOVE, the operations become costlier linearly. 
 
+We can also observe that the slope is pretty much zero for large hash tables, as the chain size reduces, the latency effects come into picture. 
+
 # Conclusion
 * Increasing the number of client threads, increases the latency due to server-client interaction
 * Increasing the hash table size, reduces the latency of processing element.
