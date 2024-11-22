@@ -66,7 +66,7 @@ The Server consists of three different stages:
 2.  Processing threads: Each processing thread dequeues the request from the `request queue`, processes it and enqueues the response to the `response queue`
 3.  Response thread: Whenever a response is available in the `response queue`, it dequeues it and writes it to the `Response SHM`
 The enqueue, dequeue processes of the `request queue` and `response queue` are safely synchronized using lock mechanisms.
-Each bin of the hash table has separate reader-writer lock to ensure safety of concurrent operations. This enables multiple bins to be accessed at the same time by the processing threads enabling concurrency. The processing threads support INSERTION (O(1)), READ(O(n)) and REMOVE(O(n)) element operations.
+Each bin of the hash table has separate reader-writer lock to ensure safety of concurrent operations. This enables multiple bins to be accessed at the same time by the processing threads enabling concurrency. The processing threads support INSERTION, READ and REMOVE element operations.
 
 Although the functionality is achieved, the current code has following issues in it:
 1.  Safe exit for server is not achieved. Segmentation fault arises on SIGINT.
@@ -142,6 +142,31 @@ From the above results, we can safely conclude that increasing the number of cli
 
 We can also observe that latency in reading response is quite high compared to writing the request. This is because, once a response is put into the SHM, each client thread has to check whether the written response is the response to the request it sent. This results in a polling behavior among all client threads, until the response is read, increasing the reading response latency drastically 
 
+## Latency: Hash Table Collisions
+A hash table of given size is initialized in the server. Hash table collisions are resolved by maintaining a linked list for each bucket/entry in the hash table. As the linked list chain length increases, the time taken for READ and REMOVE operation increases linearly O(n). However the time taken for INSERT operation is O(1) since insertion happens at the top of the linked list. Following results prove that.
+![image](https://github.com/user-attachments/assets/ef1cb358-c5b9-4a98-a5b0-c93ac4a72844)
+![image](https://github.com/user-attachments/assets/f4e7be16-ebef-4f87-8ca1-2fca0c714d3b)
+![image](https://github.com/user-attachments/assets/e4846eb5-3a23-4d0d-9044-61e6f47e4fda)
+```
+Slope of regression line for READ (num_hash=10): 1.4033
+Slope of regression line for READ (num_hash=30): 0.7112
+Slope of regression line for READ (num_hash=100): 0.3090
+Slope of regression line for READ (num_hash=300): 0.1307
+Slope of regression line for READ (num_hash=1000): 0.0474
+Slope of regression line for READ (num_hash=3000): 0.0162
+Slope of regression line for READ (num_hash=10000): 0.0046
+Slope of regression line for READ (num_hash=30000): 0.0020
+Slope of regression line for READ (num_hash=100000): 0.0002
 
 
-
+Slope of regression line for REMOVE (num_hash=10): 1.3798
+Slope of regression line for REMOVE (num_hash=30): 0.7019
+Slope of regression line for REMOVE (num_hash=100): 0.3095
+Slope of regression line for REMOVE (num_hash=300): 0.1306
+Slope of regression line for REMOVE (num_hash=1000): 0.0471
+Slope of regression line for REMOVE (num_hash=3000): 0.0163
+Slope of regression line for REMOVE (num_hash=10000): 0.0046
+Slope of regression line for REMOVE (num_hash=30000): 0.0020
+Slope of regression line for REMOVE (num_hash=100000): 0.0002
+```
+As we can observe, time taken for INSERTION operation remains the same even after a large number of elements inserted into the linked lists of the hash table buckets. However, for READ and REMOVE, the operations become costlier linearly. 
