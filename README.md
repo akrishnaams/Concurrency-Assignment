@@ -142,6 +142,8 @@ From the above results, we can safely conclude that increasing the number of cli
 
 We can also observe that latency in reading response is quite high compared to writing the request. This is because, once a response is put into the SHM, each client thread has to check whether the written response is the response to the request it sent. This results in a polling behavior among all client threads, until the response is read, increasing the reading response latency drastically 
 
+`Note:` While one might expect that increasing the number of client threads (and number of processing threads) will increase the total number of requests processed per second, that may not be observed, as the time taken to process each request increases (because latency of interaction increases with number of client threads)  
+
 ## Latency: Hash Table Collisions
 A hash table of given size is initialized in the server. Hash table collisions are resolved by maintaining a linked list for each bucket/entry in the hash table. As the linked list chain length increases, the time taken for READ and REMOVE operation increases linearly O(n). However the time taken for INSERT operation is O(1) since insertion happens at the top of the linked list. Following results prove that.
 ![image](https://github.com/user-attachments/assets/ef1cb358-c5b9-4a98-a5b0-c93ac4a72844)
@@ -170,3 +172,7 @@ Slope of regression line for REMOVE (num_hash=30000): 0.0020
 Slope of regression line for REMOVE (num_hash=100000): 0.0002
 ```
 As we can observe, time taken for INSERTION operation remains the same even after a large number of elements inserted into the linked lists of the hash table buckets. However, for READ and REMOVE, the operations become costlier linearly. 
+
+# Conclusion
+* Increasing the number of client threads, increases the latency due to server-client interaction
+* Increasing the hash table size, reduces the latency of processing element.
